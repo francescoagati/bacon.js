@@ -1,6 +1,10 @@
-import * as Bacon from '../../dist/Bacon.mjs';
-import { expect } from "chai";
-const pkg = require('../../package.json');
+import * as Bacon from "../../dist/Bacon.mjs";
+import chai from "chai";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../../package.json");
+const { expect } = chai;
 
 describe("ES6 module", function() {
   it("Passes smoke test", () => {
