@@ -51,23 +51,21 @@ class Buffer<V> {
   end: End | undefined = undefined
   values: V[] = []
   flush() {
-    if (this.scheduled) {
-      GlobalScheduler.scheduler.clearTimeout(this.scheduled);
-      this.scheduled = null;
+    this.cancelScheduledFlush();
+    if (!this.hasBufferedValues()) {
+      return this.flushEndIfPresent();
     }
-    if (this.values.length > 0) {
-      //console.log Bacon.scheduler.now() + ": flush " + @values
-      var valuesToPush = this.values;
-      this.values = [];
-      var reply = this.push(nextEvent(valuesToPush));
-      if ((this.end != null)) {
-        return this.push(this.end);
-      } else if (reply !== noMore) {
-        return this.onFlush(this);
-      }
-    } else {
-      if ((this.end != null)) { return this.push(this.end); }
+
+    var valuesToPush = this.values;
+    this.values = [];
+    var reply = this.push(nextEvent(valuesToPush));
+    if (this.end != null) {
+      return this.push(this.end);
     }
+    if (reply === noMore) {
+      return reply;
+    }
+    return this.onFlush(this);
   }
   schedule(delay: DelayFunction) {
     if (!this.scheduled) {
@@ -75,6 +73,23 @@ class Buffer<V> {
         //console.log Bacon.scheduler.now() + ": scheduled flush"
         return this.flush();
       });
+    }
+  }
+
+  cancelScheduledFlush() {
+    if (this.scheduled) {
+      GlobalScheduler.scheduler.clearTimeout(this.scheduled);
+      this.scheduled = null;
+    }
+  }
+
+  hasBufferedValues() {
+    return this.values.length > 0;
+  }
+
+  flushEndIfPresent() {
+    if (this.end != null) {
+      return this.push(this.end);
     }
   }
 
