@@ -7,37 +7,43 @@ import { Reply, more, noMore } from "./reply";
 
 /** @hidden */
 export function holdWhen<V>(src: Observable<V>, valve: Property<boolean>): EventStream<V> {
-  var onHold = false
-  var bufferedValues: V[] = []
-  var srcIsEnded = false
-  return new EventStream(new Desc(src, "holdWhen", [valve]), function(sink: EventSink<V>) {
-    var composite = new CompositeUnsubscribe()
-    var subscribed = false
-    var endIfBothEnded = function(unsub?: Unsub): Reply {
+  let onHold = false
+  let bufferedValues: V[] = []
+  let srcIsEnded = false
+  return new EventStream(new Desc(src, "holdWhen", [valve]), (sink: EventSink<V>) => {
+    const composite = new CompositeUnsubscribe()
+    let subscribed = false
+    const flushBufferedValues = (): Reply => {
+      for (const value of bufferedValues) {
+        const reply = sink(nextEvent(value))
+        if (reply === noMore) {
+          bufferedValues = []
+          return noMore
+        }
+      }
+      bufferedValues = []
+      return more
+    }
+    const endIfBothEnded = (unsub?: Unsub): Reply => {
       if (unsub) { unsub() }
       if (composite.empty() && subscribed) {
         return sink(endEvent())
       }
       return more
     }
-    composite.add(function(unsubAll: Unsub, unsubMe: Unsub) {
-      return valve.subscribeInternal(function(event: Event<boolean>): Reply {
+    composite.add((_unsubAll: Unsub, unsubMe: Unsub) => {
+      return valve.subscribeInternal((event: Event<boolean>): Reply => {
         if (hasValue(event)) {
           onHold = event.value
-          var result = more
           if (!onHold) {
-            var toSend = bufferedValues
-            bufferedValues = []
-            for (var i = 0; i < toSend.length; i++) {
-              result = sink(nextEvent(toSend[i]))
-            }
-            if(srcIsEnded){
-              sink(endEvent())
+            const result = flushBufferedValues()
+            if (result === noMore) { return noMore }
+            if (srcIsEnded) {
               unsubMe()
-              result = noMore
+              return sink(endEvent())
             }
           }
-          return result
+          return more
         } else if (event.isEnd) {
           return endIfBothEnded(unsubMe)
         } else {
@@ -45,8 +51,8 @@ export function holdWhen<V>(src: Observable<V>, valve: Property<boolean>): Event
         }
       })
     })
-    composite.add(function(unsubAll: Unsub, unsubMe: Unsub) {
-      return src.subscribeInternal(function(event: Event<V>): Reply {
+    composite.add((_unsubAll: Unsub, unsubMe: Unsub) => {
+      return src.subscribeInternal((event: Event<V>): Reply => {
         if (onHold && hasValue(event)) {
           bufferedValues.push(event.value)
           return more
